@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ScopeLock</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Fraunces:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --indigo: #6366f1;
+    --purple: #8b5cf6;
+    --indigo-dim: rgba(99,102,241,0.15);
+    --indigo-border: rgba(99,102,241,0.25);
+    --green: #22c55e;
+    --red-soft: rgba(239,68,68,0.15);
+    --red-border: rgba(239,68,68,0.3);
+    --text: #e2e8f0;
+    --text-muted: #94a3b8;
+    --text-hint: #64748b;
+    --surface: rgba(15,15,35,0.6);
+    --bg: #0f0f23;
+  }
+
+  body {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #0f0f23 100%);
+    font-family: 'Outfit', sans-serif;
+    color: var(--text);
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(circle at 20% 80%, rgba(99,102,241,0.08) 0%, transparent 50%),
+      radial-gradient(circle at 80% 20%, rgba(139,92,246,0.08) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(15,15,35,0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--indigo-border);
+    padding: 1.25rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .logo { display: flex; align-items: center; gap: 0.75rem; }
+  .logo-icon {
+    width: 44px; height: 44px;
+    background: linear-gradient(135deg, var(--indigo), var(--purple));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 20px rgba(99,102,241,0.35);
+  }
+  .logo-icon svg { width: 22px; height: 22px; stroke: white; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .logo-name { font-family: 'Fraunces', serif; font-size: 26px; font-weight: 800; color: white; }
+  .logo-name span { background: linear-gradient(135deg, var(--indigo), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+
+  .progress-wrap { display: flex; align-items: center; gap: 1rem; }
+  .progress-bar { width: 180px; height: 7px; background: var(--indigo-dim); border-radius: 4px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--indigo), var(--purple)); border-radius: 4px; transition: width 0.6s cubic-bezier(0.4,0,0.2,1); }
+  .progress-label { font-size: 13px; font-weight: 600; color: #a5b4fc; }
+
+  main { max-width: 980px; margin: 0 auto; padding: 3rem 2rem; position: relative; z-index: 1; }
+
+  .view { animation: fadeUp 0.5s ease-out; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* --- WELCOME --- */
+  .welcome { display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; align-items: center; min-height: 72vh; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--indigo-dim); color: #a5b4fc;
+    padding: 0.4rem 1rem; border-radius: 100px;
+    font-size: 13px; font-weight: 600; margin-bottom: 1.5rem;
+  }
+  .badge svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .welcome h1 {
+    font-family: 'Fraunces', serif; font-size: 52px; font-weight: 800; line-height: 1.1; margin-bottom: 1.25rem;
+    background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .welcome p { font-size: 17px; color: var(--text-muted); line-height: 1.7; margin-bottom: 2.5rem; }
+  .feature-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; margin-bottom: 2.5rem; }
+  .feature-item { background: var(--surface); border: 1px solid var(--indigo-border); border-radius: 12px; padding: 1.25rem 1rem; }
+  .feature-num { font-size: 12px; font-weight: 700; color: var(--indigo); margin-bottom: 0.5rem; letter-spacing: 1px; }
+  .feature-title { font-size: 14px; font-weight: 600; margin-bottom: 0.25rem; }
+  .feature-desc { font-size: 12px; color: var(--text-muted); }
+
+  .welcome-visual { position: relative; height: 360px; }
+  .float-card {
+    position: absolute; background: var(--surface); border: 1px solid var(--indigo-border);
+    border-radius: 14px; padding: 1rem 1.5rem; display: flex; align-items: center; gap: 10px;
+    font-weight: 600; font-size: 15px; backdrop-filter: blur(10px);
+  }
+  .float-card svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .float-card.c1 { top: 15%; left: 10%; color: #a5b4fc; animation: float1 4s ease-in-out infinite; }
+  .float-card.c2 { top: 45%; right: 5%; color: #4ade80; animation: float2 5s ease-in-out infinite; }
+  .float-card.c3 { bottom: 15%; left: 20%; color: #c084fc; animation: float3 4.5s ease-in-out infinite; }
+  @keyframes float1 { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
+  @keyframes float2 { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+  @keyframes float3 { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-14px)} }
+
+  .trust { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-hint); margin-top: 1.25rem; }
+  .trust svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* --- INTAKE --- */
+  .intake { max-width: 700px; margin: 0 auto; }
+  .step-indicator { font-size: 13px; font-weight: 600; color: var(--indigo); letter-spacing: 0.5px; margin-bottom: 0.75rem; }
+  .intake h2 { font-family: 'Fraunces', serif; font-size: 36px; font-weight: 800; margin-bottom: 0.75rem; }
+  .intake-sub { font-size: 16px; color: var(--text-muted); margin-bottom: 2.5rem; }
+
+  .project-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 1rem; margin-bottom: 2.5rem; }
+  .project-card {
+    background: var(--surface); border: 2px solid var(--indigo-border);
+    border-radius: 14px; padding: 1.5rem; cursor: pointer;
+    transition: all 0.2s; position: relative;
+  }
+  .project-card:hover { border-color: var(--indigo); background: rgba(99,102,241,0.08); }
+  .project-card.selected { border-color: var(--indigo); background: rgba(99,102,241,0.12); }
+  .project-card .icon { font-size: 28px; margin-bottom: 0.75rem; }
+  .project-card .card-title { font-size: 16px; font-weight: 700; margin-bottom: 0.25rem; }
+  .project-card .card-desc { font-size: 13px; color: var(--text-muted); }
+  .check-badge {
+    position: absolute; top: 12px; right: 12px;
+    width: 22px; height: 22px; background: var(--indigo); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .check-badge svg { width: 12px; height: 12px; stroke: white; fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+
+  .form-block { margin-bottom: 2rem; }
+  .form-label { font-size: 15px; font-weight: 600; margin-bottom: 0.75rem; display: block; }
+  .radio-group { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+  .radio-card {
+    flex: 1; min-width: 120px; background: var(--surface); border: 2px solid var(--indigo-border);
+    border-radius: 12px; padding: 1rem; cursor: pointer; display: flex; align-items: center; gap: 10px;
+    transition: all 0.2s;
+  }
+  .radio-card:hover { border-color: var(--indigo); }
+  .radio-card.selected { border-color: var(--indigo); background: rgba(99,102,241,0.1); }
+  .radio-dot-wrap { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--indigo-border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .radio-card.selected .radio-dot-wrap { border-color: var(--indigo); }
+  .radio-dot-inner { width: 8px; height: 8px; background: var(--indigo); border-radius: 50%; display: none; }
+  .radio-card.selected .radio-dot-inner { display: block; }
+  .radio-label { font-size: 15px; font-weight: 600; }
+  .radio-sub { font-size: 12px; color: var(--text-muted); }
+
+  .input-wrap { position: relative; display: flex; align-items: center; }
+  .input-prefix { position: absolute; left: 14px; font-size: 16px; color: var(--text-muted); pointer-events: none; }
+  .text-input {
+    width: 100%; background: var(--surface); border: 2px solid var(--indigo-border);
+    border-radius: 10px; padding: 0.75rem 1rem 0.75rem 2rem;
+    color: var(--text); font-size: 15px; font-family: 'Outfit', sans-serif;
+    outline: none; transition: border-color 0.2s;
+  }
+  .text-input:focus { border-color: var(--indigo); }
+  .input-hint { display: flex; align-items: center; gap: 6px; margin-top: 0.5rem; font-size: 12px; color: var(--text-hint); }
+  .input-hint svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  .pill-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .pill {
+    background: var(--surface); border: 2px solid var(--indigo-border);
+    border-radius: 100px; padding: 0.4rem 1rem; font-size: 14px; font-weight: 500;
+    color: var(--text); cursor: pointer; transition: all 0.2s; font-family: 'Outfit', sans-serif;
+  }
+  .pill:hover { border-color: var(--indigo); }
+  .pill.selected { border-color: var(--indigo); background: rgba(99,102,241,0.15); color: #a5b4fc; }
+
+  /* policy cards */
+  .policy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+  .policy-card { background: var(--surface); border-radius: 14px; padding: 1.5rem; }
+  .policy-card.included { border: 2px solid rgba(34,197,94,0.3); }
+  .policy-card.excluded { border: 2px solid var(--red-border); }
+  .policy-head { display: flex; align-items: center; gap: 8px; margin-bottom: 1rem; font-size: 16px; font-weight: 700; }
+  .policy-head svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .policy-card.included .policy-head { color: #4ade80; }
+  .policy-card.excluded .policy-head { color: #f87171; }
+  .policy-card ul { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+  .policy-card li { font-size: 14px; color: var(--text-muted); padding-left: 1rem; position: relative; }
+  .policy-card li::before { content: '–'; position: absolute; left: 0; color: var(--text-hint); }
+
+  .checkbox-card {
+    background: var(--surface); border: 2px solid var(--indigo-border);
+    border-radius: 12px; padding: 1.25rem; display: flex; align-items: center; gap: 14px;
+    cursor: pointer; margin-bottom: 2.5rem; transition: all 0.2s;
+  }
+  .checkbox-card:hover { border-color: var(--indigo); }
+  .checkbox {
+    width: 24px; height: 24px; border: 2px solid var(--indigo-border); border-radius: 6px;
+    flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+  }
+  .checkbox.checked { background: var(--indigo); border-color: var(--indigo); }
+  .checkbox svg { width: 14px; height: 14px; stroke: white; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+  .checkbox-text { font-size: 15px; font-weight: 600; }
+
+  /* --- REVIEW --- */
+  .review { max-width: 880px; margin: 0 auto; }
+  .review-head { text-align: center; margin-bottom: 3rem; }
+  .review-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(34,197,94,0.15); color: #4ade80; padding: 0.4rem 1rem; border-radius: 100px; font-size: 13px; font-weight: 600; margin-bottom: 1.25rem; }
+  .review-badge svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .review h2 { font-family: 'Fraunces', serif; font-size: 40px; font-weight: 800; margin-bottom: 0.75rem; }
+  .review-sub { font-size: 16px; color: var(--text-muted); }
+
+  .summary-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 1rem; margin-bottom: 2.5rem; }
+  .summary-card { background: var(--surface); border: 2px solid var(--indigo-border); border-radius: 12px; padding: 1.25rem; text-align: center; }
+  .summary-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-hint); font-weight: 600; margin-bottom: 0.6rem; }
+  .summary-val { font-size: 17px; font-weight: 700; }
+
+  .deliverables { background: rgba(99,102,241,0.05); border: 2px solid var(--indigo-border); border-radius: 16px; padding: 2rem; margin-bottom: 2.5rem; }
+  .deliverables h3 { font-size: 18px; font-weight: 700; margin-bottom: 1.25rem; }
+  .del-list { display: flex; flex-direction: column; gap: 0.85rem; }
+  .del-item { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+  .del-item svg { width: 17px; height: 17px; stroke: #22c55e; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+  /* --- LOCKED --- */
+  .locked { max-width: 660px; margin: 0 auto; text-align: center; }
+  .success-circle {
+    width: 110px; height: 110px; background: linear-gradient(135deg, #22c55e, #16a34a);
+    border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    margin-bottom: 2rem; box-shadow: 0 8px 40px rgba(34,197,94,0.35);
+    animation: pop 0.6s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  @keyframes pop { from{transform:scale(0)} to{transform:scale(1)} }
+  .success-circle svg { width: 56px; height: 56px; stroke: white; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .locked-badge { display: inline-flex; align-items: center; gap: 6px; background: var(--indigo-dim); color: #a5b4fc; padding: 0.4rem 1rem; border-radius: 100px; font-size: 13px; font-weight: 600; margin-bottom: 1.25rem; }
+  .locked-badge svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .locked h2 { font-family: 'Fraunces', serif; font-size: 46px; font-weight: 800; margin-bottom: 1rem; }
+  .locked-sub { font-size: 17px; color: var(--text-muted); line-height: 1.7; margin-bottom: 2.5rem; }
+
+  .next-steps { background: rgba(99,102,241,0.05); border: 2px solid var(--indigo-border); border-radius: 16px; padding: 2rem; margin-bottom: 2.5rem; text-align: left; }
+  .next-steps-title { font-size: 17px; font-weight: 700; margin-bottom: 1.25rem; }
+  .step-item { display: flex; gap: 1rem; margin-bottom: 1.25rem; align-items: flex-start; }
+  .step-item:last-child { margin-bottom: 0; }
+  .step-num { width: 30px; height: 30px; background: linear-gradient(135deg, var(--indigo), var(--purple)); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .step-text { font-size: 14px; color: #cbd5e1; padding-top: 5px; line-height: 1.6; }
+
+  .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+  /* --- BUTTONS --- */
+  .btn-row { display: flex; justify-content: space-between; gap: 1rem; margin-top: 2.5rem; }
+  .btn-primary {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: linear-gradient(135deg, var(--indigo), var(--purple));
+    color: white; border: none; border-radius: 10px; padding: 0.8rem 1.75rem;
+    font-size: 15px; font-weight: 700; font-family: 'Outfit', sans-serif;
+    cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 20px rgba(99,102,241,0.3);
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 28px rgba(99,102,241,0.45); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+  .btn-primary svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .btn-secondary {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--surface); color: var(--text);
+    border: 2px solid var(--indigo-border); border-radius: 10px; padding: 0.8rem 1.75rem;
+    font-size: 15px; font-weight: 600; font-family: 'Outfit', sans-serif;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .btn-secondary:hover { border-color: var(--indigo); }
+  .btn-secondary svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  @media (max-width: 768px) {
+    .welcome { grid-template-columns: 1fr; }
+    .welcome-visual { display: none; }
+    .project-grid { grid-template-columns: 1fr; }
+    .summary-grid { grid-template-columns: repeat(2,1fr); }
+    .policy-grid { grid-template-columns: 1fr; }
+    .action-grid { grid-template-columns: 1fr; }
+    .welcome h1 { font-size: 36px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </div>
+    <div class="logo-name">Scope<span>Lock</span></div>
+  </div>
+  <div class="progress-wrap">
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <div class="progress-label" id="progressLabel">0% Complete</div>
+  </div>
+</header>
+
+<main id="app"></main>
+
+<script>
+const state = {
+  view: 'welcome',
+  projectType: '',
+  timeline: '',
+  budget: '',
+  pages: '',
+  revisions: false
+};
+
+const steps = { welcome:0, intake1:20, intake2:40, intake3:60, review:80, locked:100 };
+
+const icons = {
+  sparkles: `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M5 3l.75 2.25L8 6l-2.25.75L5 9l-.75-2.25L2 6l2.25-.75z"/><path d="M19 15l.75 2.25L22 18l-2.25.75L19 21l-.75-2.25L16 18l2.25-.75z"/></svg>`,
+  arrow: `<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>`,
+  check: `<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+  lock: `<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
+  file: `<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`,
+  clock: `<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  checkcircle: `<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,
+  alert: `<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap: "round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
+  send: `<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`
+};
+
+function go(view) {
+  state.view = view;
+  render();
+  document.getElementById('progressFill').style.width = steps[view] + '%';
+  document.getElementById('progressLabel').textContent = steps[view] + '% Complete';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function projectLabel(t) {
+  return { website: 'Website Design', branding: 'Brand Identity', app: 'Mobile App', marketing: 'Marketing Assets' }[t] || '—';
+}
+function timelineLabel(t) {
+  return { '2weeks': '2 weeks', '1month': '1 month', '2months': '2+ months' }[t] || '—';
+}
+
+function render() {
+  const app = document.getElementById('app');
+  const v = state.view;
+
+  if (v === 'welcome') {
+    app.innerHTML = `
+      <div class="view welcome">
+        <div class="welcome-content">
+          <div class="badge">${icons.sparkles} Smart Onboarding</div>
+          <h1>Let's align on your project<br>before we begin</h1>
+          <p>Complete this guided intake to ensure we're on the same page about deliverables, timeline, and scope. It takes about 5 minutes.</p>
+          <div class="feature-grid">
+            <div class="feature-item"><div class="feature-num">01</div><div class="feature-title">Answer questions</div><div class="feature-desc">Tell us about your project needs</div></div>
+            <div class="feature-item"><div class="feature-num">02</div><div class="feature-title">Review scope</div><div class="feature-desc">See what's included & excluded</div></div>
+            <div class="feature-item"><div class="feature-num">03</div><div class="feature-title">Lock & sign</div><div class="feature-desc">Both parties approve & sign</div></div>
+          </div>
+          <button class="btn-primary" onclick="go('intake1')">Start onboarding ${icons.arrow}</button>
+          <div class="trust">${icons.clock} Average completion time: 5 minutes</div>
+        </div>
+        <div class="welcome-visual">
+          <div class="float-card c1">${icons.file} Scope Document</div>
+          <div class="float-card c2">${icons.checkcircle} Approved</div>
+          <div class="float-card c3">${icons.lock} Locked</div>
+        </div>
+      </div>`;
+  }
+
+  else if (v === 'intake1') {
+    const types = [
+      { id:'website', icon:'🌐', title:'Website Design', desc:'Full site redesign or new build' },
+      { id:'branding', icon:'🎨', title:'Brand Identity', desc:'Logo, colors, typography system' },
+      { id:'app', icon:'📱', title:'Mobile App', desc:'iOS/Android app design' },
+      { id:'marketing', icon:'🖼️', title:'Marketing Assets', desc:'Social graphics, ads, email' }
+    ];
+    app.innerHTML = `
+      <div class="view intake">
+        <div class="step-indicator">Step 1 of 3</div>
+        <h2>What type of project is this?</h2>
+        <p class="intake-sub">This helps us understand your deliverables and set the right expectations.</p>
+        <div class="project-grid">
+          ${types.map(t => `
+            <div class="project-card${state.projectType===t.id?' selected':''}" onclick="state.projectType='${t.id}';render()">
+              <div class="icon">${t.icon}</div>
+              <div class="card-title">${t.title}</div>
+              <div class="card-desc">${t.desc}</div>
+              ${state.projectType===t.id ? `<div class="check-badge">${icons.check}</div>` : ''}
+            </div>`).join('')}
+        </div>
+        <div class="btn-row">
+          <button class="btn-secondary" onclick="go('welcome')">&larr; Back</button>
+          <button class="btn-primary" onclick="go('intake2')" ${!state.projectType?'disabled':''}>Continue ${icons.arrow}</button>
+        </div>
+      </div>`;
+  }
+
+  else if (v === 'intake2') {
+    const timelines = [
+      { id:'2weeks', label:'2 weeks', sub:'Rush fee' },
+      { id:'1month', label:'1 month', sub:'Standard' },
+      { id:'2months', label:'2+ months', sub:'Flexible' }
+    ];
+    const pages = ['1-3 pages','4-7 pages','8-15 pages','15+ pages'];
+    app.innerHTML = `
+      <div class="view intake">
+        <div class="step-indicator">Step 2 of 3</div>
+        <h2>Timeline & project details</h2>
+        <p class="intake-sub">Help us scope your project accurately.</p>
+        <div class="form-block">
+          <label class="form-label">When do you need this completed?</label>
+          <div class="radio-group">
+            ${timelines.map(t => `
+              <div class="radio-card${state.timeline===t.id?' selected':''}" onclick="state.timeline='${t.id}';render()">
+                <div class="radio-dot-wrap"><div class="radio-dot-inner"></div></div>
+                <div><div class="radio-label">${t.label}</div><div class="radio-sub">${t.sub}</div></div>
+              </div>`).join('')}
+          </div>
+        </div>
+        <div class="form-block">
+          <label class="form-label">What's your budget range?</label>
+          <div class="input-wrap">
+            <span class="input-prefix">$</span>
+            <input class="text-input" type="text" placeholder="5,000 – 10,000" value="${state.budget}" oninput="state.budget=this.value">
+          </div>
+          <div class="input-hint">${icons.alert} This helps set realistic scope expectations</div>
+        </div>
+        ${state.projectType==='website' ? `
+        <div class="form-block">
+          <label class="form-label">How many pages do you need?</label>
+          <div class="pill-group">
+            ${pages.map(p=>`<button class="pill${state.pages===p?' selected':''}" onclick="state.pages='${p}';render()">${p}</button>`).join('')}
+          </div>
+        </div>` : ''}
+        <div class="btn-row">
+          <button class="btn-secondary" onclick="go('intake1')">&larr; Back</button>
+          <button class="btn-primary" onclick="go('intake3')" ${!state.timeline?'disabled':''}>Continue ${icons.arrow}</button>
+        </div>
+      </div>`;
+  }
+
+  else if (v === 'intake3') {
+    app.innerHTML = `
+      <div class="view intake">
+        <div class="step-indicator">Step 3 of 3</div>
+        <h2>Understanding revisions</h2>
+        <p class="intake-sub">Clear revision limits prevent scope creep and keep projects on track.</p>
+        <div class="policy-grid">
+          <div class="policy-card included">
+            <div class="policy-head">${icons.checkcircle} What's included</div>
+            <ul>
+              <li>2 rounds of revisions</li>
+              <li>Minor text & color adjustments</li>
+              <li>Layout tweaks within scope</li>
+              <li>File format variations</li>
+            </ul>
+          </div>
+          <div class="policy-card excluded">
+            <div class="policy-head">${icons.alert} Additional charges</div>
+            <ul>
+              <li>New pages or sections</li>
+              <li>Complete redesigns</li>
+              <li>Revisions after approval</li>
+              <li>Scope changes mid-project</li>
+            </ul>
+          </div>
+        </div>
+        <div class="checkbox-card" onclick="state.revisions=!state.revisions;render()">
+          <div class="checkbox${state.revisions?' checked':''}">${state.revisions?icons.check:''}</div>
+          <div class="checkbox-text">I understand the revision policy and scope boundaries</div>
+        </div>
+        <div class="btn-row">
+          <button class="btn-secondary" onclick="go('intake2')">&larr; Back</button>
+          <button class="btn-primary" onclick="go('review')" ${!state.revisions?'disabled':''}>Review scope ${icons.arrow}</button>
+        </div>
+      </div>`;
+  }
+
+  else if (v === 'review') {
+    app.innerHTML = `
+      <div class="view review">
+        <div class="review-head">
+          <div class="review-badge">${icons.file} Ready for approval</div>
+          <h2>Your project scope</h2>
+          <p class="review-sub">Review everything below. Once locked, any changes require mutual approval.</p>
+        </div>
+        <div class="summary-grid">
+          <div class="summary-card"><div class="summary-lbl">Project type</div><div class="summary-val">${projectLabel(state.projectType)}</div></div>
+          <div class="summary-card"><div class="summary-lbl">Timeline</div><div class="summary-val">${timelineLabel(state.timeline)}</div></div>
+          <div class="summary-card"><div class="summary-lbl">Budget</div><div class="summary-val">${state.budget ? '$'+state.budget : '—'}</div></div>
+          <div class="summary-card"><div class="summary-lbl">Revisions</div><div class="summary-val">2 rounds included</div></div>
+        </div>
+        <div class="deliverables">
+          <h3>Included deliverables</h3>
+          <div class="del-list">
+            ${['Initial design concepts (3 options)','High-fidelity mockups','Final design files (Figma/Sketch)','Style guide & component library','2 revision rounds'].map(d=>`
+              <div class="del-item">${icons.check} <span>${d}</span></div>`).join('')}
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn-secondary" onclick="go('intake1')">&larr; Edit details</button>
+          <button class="btn-primary" onclick="go('locked')">${icons.lock} Approve & lock scope</button>
+        </div>
+      </div>`;
+  }
+
+  else if (v === 'locked') {
+    app.innerHTML = `
+      <div class="view locked">
+        <div class="success-circle">${icons.checkcircle}</div>
+        <div class="locked-badge">${icons.lock} Scope locked</div>
+        <h2>You're all set!</h2>
+        <p class="locked-sub">Both you and Alex Torres have agreed to the project scope. Any changes will require mutual approval and may adjust timeline and budget.</p>
+        <div class="next-steps">
+          <div class="next-steps-title">What happens next?</div>
+          <div class="step-item"><div class="step-num">1</div><div class="step-text">Alex will reach out within 24 hours to schedule your creative kickoff call</div></div>
+          <div class="step-item"><div class="step-num">2</div><div class="step-text">You'll receive a copy of the locked scope document via email</div></div>
+          <div class="step-item"><div class="step-num">3</div><div class="step-text">Project work begins after the kickoff call</div></div>
+        </div>
+        <div class="action-grid">
+          <button class="btn-primary">${icons.file} View full contract</button>
+          <button class="btn-secondary">${icons.send} Download PDF</button>
+        </div>
+      </div>`;
+  }
+}
+
+render();
+</script>
+</body>
+</html>
